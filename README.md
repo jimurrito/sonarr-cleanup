@@ -7,6 +7,16 @@ Identifies downloads in Sonarr's queue that are completed but stuck in an `impor
 
 ---
 
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Usage](#usage)
+- [Parameters](#parameters)
+- [How It Works](#how-it-works)
+- [NixOS — Flake Overlay](#nixos--flake-overlay)
+
+---
+
 ## Requirements
 
 - PowerShell 5.1+
