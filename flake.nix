@@ -10,15 +10,30 @@
 {
   description = "Sonarr-Cleanup script and service";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    test-vm.url = "github:jimurrito/nixos-test-vm";
   };
   #
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      test-vm,
+    }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
+    in
+    with lib;
+    let
+      # Inject powershell.config.json into $PSHOME
+      # Without this, powershell is verbose log a bunch of random crap when used in a systemd service.
+      quietPowershell = pkgs.powershell.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          echo '{"LogLevel":"Critical"}' > $out/share/powershell/powershell.config.json
+        '';
+      });
     in
     {
       packages.${system}.default = pkgs.stdenv.mkDerivation {
@@ -35,7 +50,7 @@
           mkdir -p "$out/bin"
           cat > "$out/bin/sonarr-cleanup" << EOF
           #!/usr/bin/env bash
-          ${lib.getExe pkgs.powershell} -NonInteractive -Command "$moduleDir/app.ps1 \$@"
+          ${getExe quietPowershell} -NonInteractive -NoLogo -NoProfile -Command "$moduleDir/app.ps1" "\$@"
           EOF
           chmod +x "$out/bin/sonarr-cleanup"
         '';
@@ -55,9 +70,10 @@
           mainpackage = self.packages.${pkgsystem}.default;
           sonclu-nixops = config.services.sonarr-cleanup;
         in
+        with lib;
         {
           # Options for services overlay
-          options.services.sonarr-cleanup = with lib; {
+          options.services.sonarr-cleanup = {
             enable = mkEnableOption "Sonarr Cleanup service";
             url = mkOption {
               type = types.str;
@@ -77,14 +93,12 @@
           };
           #
           # config to be implemented via the `options`
-          config = lib.mkIf sonclu-nixops.enable {
+          config = mkIf sonclu-nixops.enable {
             # Imports package and runs the install steps
             environment.systemPackages = [
               mainpackage
             ];
             # rootless identity
-            # Requires home dir as this needs an interactive shell
-            # If we can port `ionmod` module to a derivation, this can go back to `isSystemUser = true;`
             users = {
               groups.sonarr-cleanup = { };
               users.sonarr-cleanup = {
@@ -100,14 +114,14 @@
                 enable = true;
                 description = "Sonarr Cleanup service";
                 restartIfChanged = true;
-                path = with pkgs; [
-                  powershell
+                path = [
+                  quietPowershell
                 ];
-                serviceConfig = with lib; {
+                serviceConfig = {
                   Type = "oneshot";
                   User = "sonarr-cleanup";
                   Group = "sonarr-cleanup";
-                  ExecStart = ''
+                   ExecStart = ''
                     ${getExe mainpackage} -Url ${sonclu-nixops.url} -ApiKeyPath ${sonclu-nixops.keyPath}
                   '';
                 };
@@ -120,6 +134,33 @@
                 timerConfig.OnCalendar = sonclu-nixops.interval;
               };
             };
+          };
+        };
+      #
+      #
+      # TestVM
+      nixosConfigurations =
+        let
+          testConfig =
+            { ... }:
+            {
+              services.sonarr-cleanup = {
+                enable = true;
+                url = "https://sonarr.immerhouse.com";
+                interval = "hourly";
+                keyPath = "/etc/sonarr-key";
+              };
+            };
+        in
+        {
+          test-vm = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            modules = [
+              test-vm.baselineConfig
+              # test config
+              self.nixosModules.default
+              testConfig
+            ];
           };
         };
     };
