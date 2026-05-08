@@ -21,12 +21,6 @@
       test-vm,
     }:
     let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      lib = nixpkgs.lib;
-    in
-    with lib;
-    let
       # Inject powershell.config.json into $PSHOME
       # Without this, powershell is verbose log a bunch of random crap when used in a systemd service.
       quietPowershell = pkgs.powershell.overrideAttrs (old: {
@@ -34,8 +28,13 @@
           echo '{"LogLevel":"Critical"}' > $out/share/powershell/powershell.config.json
         '';
       });
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+      lib = nixpkgs.lib;
     in
+    with lib;
     {
+      #
       packages.${system}.default = pkgs.stdenv.mkDerivation {
         pname = "sonarr-cleanup";
         meta.mainProgram = "sonarr-cleanup";
@@ -55,7 +54,6 @@
           chmod +x "$out/bin/sonarr-cleanup"
         '';
       };
-
       #
       #
       nixosModules.default =
@@ -121,7 +119,7 @@
                   Type = "oneshot";
                   User = "sonarr-cleanup";
                   Group = "sonarr-cleanup";
-                   ExecStart = ''
+                  ExecStart = ''
                     ${getExe mainpackage} -Url ${sonclu-nixops.url} -ApiKeyPath ${sonclu-nixops.keyPath}
                   '';
                 };
