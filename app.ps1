@@ -45,13 +45,20 @@ $queue = invoke-webrequest -uri "$Url/api/v3/queue" -Method 'GET' -Headers $head
 
 # filter out the good bois and only keep the bad ones :p
 $queue.records
-| where-object {$_.status -eq "completed" -and $_.trackedDownloadStatus -eq "warning" -and $_.trackedDownloadState -eq "importPending"}
-| where-object {$_.statusMessages.messages -match "No files found are eligible for import in" -or $_.statusMessages.messages -match "Dangerous" }
+| where-object {
+    $_.status -eq "completed" `
+        -and $_.trackedDownloadStatus -eq "warning" `
+        -and $_.trackedDownloadState -eq "importPending" `
+        -and $_.statusMessages.messages -match "No files found are eligible for import in" `
+        -or $_.statusMessages.messages -match "Dangerous" `
+        -or $_.statusMessages.messages -match "executable"
+}
 | foreach-object {
     # verbose
-    write-host "Bad download: [$($_.title)]"
+    write-host ("Bad download: [ {0} ] | [ {1} ]" -f $_.title, $_.statusMessages.messages)
     # delete & blacklist+search
-    $resp = invoke-webrequest -uri "$Url/api/v3/queue/$($_.id)?removeFromClient=true&blocklist=true" -Method 'DELETE' -Headers $headers
+    $uri = ("{0}/api/v3/queue/{1}?removeFromClient=true&blocklist=true" -f $Url, $_.id)
+    $resp = invoke-webrequest -uri $uri -Method DELETE -Headers $headers
     # back at is again with the verbose!!
     write-host "Removed with status code: [$($resp.statusCode)]"
 }
