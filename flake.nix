@@ -37,8 +37,6 @@
         "x86_64-linux"
         "aarch64-linux"
       ];
-      # package function that allows for arch specific pkgs to be provided
-      # mkPackage = pkgs: pkgs.sonarr-cleanup;
       # multi arch packager
       packager = sys: {
         ${sys}.default =
