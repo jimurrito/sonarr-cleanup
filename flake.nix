@@ -10,8 +10,16 @@
 {
   description = "Sonarr-Cleanup script and service";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    test-vm.url = "github:jimurrito/nixos-test-vm";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    test-vm = {
+      url = "github:jimurrito/nixos-test-vm";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # can not use espresso as it will cause a recursive error for users who use sonarr-cleanup via espresso
+    qpwsh = {
+      url = "git+https://forgejo.immerhouse.com/jimurrito/quiet-powershell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   #
   outputs =
@@ -19,43 +27,63 @@
       self,
       nixpkgs,
       test-vm,
+      qpwsh,
     }:
     let
-      # Inject powershell.config.json into $PSHOME
-      # Without this, powershell is verbose log a bunch of random crap when used in a systemd service.
-      quietPowershell = pkgs.powershell.overrideAttrs (old: {
-        postInstall = (old.postInstall or "") + ''
-          echo '{"LogLevel":"Critical"}' > $out/share/powershell/powershell.config.json
-        '';
-      });
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      lib = nixpkgs.lib;
-    in
-    with lib;
-    {
       #
-      packages.${system}.default = pkgs.stdenv.mkDerivation {
-        pname = "sonarr-cleanup";
-        meta.mainProgram = "sonarr-cleanup";
-        version = "0.1.0";
-        src = ./.;
-        dontBuild = true;
-        #
-        installPhase = ''
-          moduleDir="$out/module"
-          mkdir -p "$moduleDir"
-          cp app.ps1 "$moduleDir/"
-          mkdir -p "$out/bin"
-          cat > "$out/bin/sonarr-cleanup" << EOF
-          #!/usr/bin/env bash
-          ${getExe quietPowershell} -NonInteractive -NoLogo -NoProfile -Command "$moduleDir/app.ps1" "\$@"
-          EOF
-          chmod +x "$out/bin/sonarr-cleanup"
-        '';
+      lib = nixpkgs.lib;
+      # Supported Architectures
+      archs = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      # package function that allows for arch specific pkgs to be provided
+      # mkPackage = pkgs: pkgs.sonarr-cleanup;
+      # multi arch packager
+      packager = sys: {
+        ${sys}.default =
+          let
+            pkgs = import nixpkgs {
+              system = sys;
+              overlays = [ qpwsh.overlays.default ];
+            };
+          in
+          with lib;
+          pkgs.stdenv.mkDerivation {
+            pname = "sonarr-cleanup";
+            meta.mainProgram = "sonarr-cleanup";
+            version = "0.1.0";
+            src = ./.;
+            dontBuild = true;
+            #
+            installPhase = ''
+              moduleDir="$out/module"
+              mkdir -p "$moduleDir"
+              cp app.ps1 "$moduleDir/"
+              mkdir -p "$out/bin"
+              cat > "$out/bin/sonarr-cleanup" << EOF
+              #!/usr/bin/env bash
+              ${getExe pkgs.quietPowershell} -NonInteractive -NoLogo -NoProfile -Command "$moduleDir/app.ps1" "\$@"
+              EOF
+              chmod +x "$out/bin/sonarr-cleanup"
+            '';
+          };
       };
       #
+    in
+    {
       #
+      # Builds packages for each arch provided
+      # (') is required so foldl will be strict and not lazy
+      packages = builtins.foldl' (acc: x: acc // x) { } (map packager archs);
+      #
+      # Nixpkgs overlay for the package(s)
+      overlays.default = final: prev: {
+        sonarr-cleanup = self.packages.${final.system}.default;
+      };
+      #
+      # Default option to import package into the env
+      # and import service options
       nixosModules.default =
         {
           config,
@@ -64,8 +92,6 @@
           ...
         }:
         let
-          pkgsystem = pkgs.stdenv.hostPlatform.system;
-          mainpackage = self.packages.${pkgsystem}.default;
           sonclu-nixops = config.services.sonarr-cleanup;
         in
         with lib;
@@ -92,10 +118,8 @@
           #
           # config to be implemented via the `options`
           config = mkIf sonclu-nixops.enable {
-            # Imports package and runs the install steps
-            environment.systemPackages = [
-              mainpackage
-            ];
+            # Imports the overlay to put sonarr-cleanup in pkgs
+            nixpkgs.overlays = [ self.overlays.default ];
             # rootless identity
             users = {
               groups.sonarr-cleanup = { };
@@ -112,15 +136,12 @@
                 enable = true;
                 description = "Sonarr Cleanup service";
                 restartIfChanged = true;
-                path = [
-                  quietPowershell
-                ];
                 serviceConfig = {
                   Type = "oneshot";
                   User = "sonarr-cleanup";
                   Group = "sonarr-cleanup";
                   ExecStart = ''
-                    ${getExe mainpackage} -Url ${sonclu-nixops.url} -ApiKeyPath ${sonclu-nixops.keyPath}
+                    ${getExe pkgs.sonarr-cleanup} -Url ${sonclu-nixops.url} -ApiKeyPath ${sonclu-nixops.keyPath}
                   '';
                 };
               };
@@ -134,6 +155,7 @@
             };
           };
         };
+      #
       #
       #
       # TestVM

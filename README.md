@@ -64,29 +64,38 @@ The API key file should be a plain text file containing only your Sonarr API key
 
 A NixOS module is included via the flake. It wraps the PowerShell script in a systemd service and timer so cleanup runs automatically on a schedule.
 
-### Importing the Flake
+### Flake Integration
 
-In your `flake.nix`:
-
-```nix
-inputs.sonarr-cleanup.url = "github:<your-username>/sonarr-cleanup";
-```
-
-Then include the module in your NixOS configuration:
+Add `sonarr-cleanup` as an input and pass its module into your `nixosSystem`:
 
 ```nix
-nixosModules = [ inputs.sonarr-cleanup.nixosModules.default ];
-```
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    sonarr-cleanup = {
+      url = "github:jimurrito/sonarr-cleanup";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
-### Configuration
-
-```nix
-services.sonarr-cleanup = {
-  enable = true;
-  url = "http://127.0.0.1:8989";   # optional, this is the default
-  keyPath = config.age.secrets.sonarr_key.path;
-  interval = "hourly";             # optional, this is the default
-};
+  outputs = { nixpkgs, sonarr-cleanup, ... }: {
+    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        sonarr-cleanup.nixosModules.default
+        {
+          services.sonarr-cleanup = {
+            enable = true;
+            url = "http://192.168.1.10:8989";
+            keyPath = "/run/secrets/sonarr-key";
+            interval = "hourly";
+          };
+        }
+      ];
+    };
+  };
+}
 ```
 
 ### Module Options
@@ -101,5 +110,5 @@ services.sonarr-cleanup = {
 ### Notes
 
 - The service runs as a dedicated `sonarr-cleanup` system user and group.
-- `powershell` is added to the service's PATH automatically.
 - The systemd timer targets `timers.target` and fires based on the configured `interval`.
+- `keyPath` works well with secret managers like [agenix](https://github.com/ryantm/agenix) — pass `config.age.secrets.sonarr_key.path` as the value.
