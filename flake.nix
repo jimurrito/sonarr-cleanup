@@ -17,7 +17,7 @@
     };
     # can not use espresso as it will cause a recursive error for users who use this app via espresso
     qpwsh = {
-      url = "git+https://forgejo.immerhouse.com/jimurrito/quiet-powershell";
+      url = "github:jimurrito/quiet-powershell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -82,85 +82,22 @@
       #
       # Default option to import package into the env
       # and import service options
-      nixosModules.default =
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-        let
-          sonclu-nixops = config.services.sonarr-cleanup;
-        in
-        with lib;
-        {
-          # Options for services overlay
-          options.services.sonarr-cleanup = {
-            enable = mkEnableOption "Sonarr Cleanup service";
-            url = mkOption {
-              type = types.str;
-              default = "http://127.0.0.1:8989";
-              description = "URL to the sonarr instance. Must include protocol (http/s)";
-            };
-            keyPath = mkOption {
-              type = types.str;
-              default = "/root/sonarr-key";
-              description = "API key for the target Sonarr Instance";
-            };
-            interval = mkOption {
-              type = types.str;
-              default = "hourly";
-              description = "How often to run cleanup. Accepts any systemd calendar expression.";
-            };
-          };
-          #
-          # config to be implemented via the `options`
-          config = mkIf sonclu-nixops.enable {
-            # Imports the overlay to put sonarr-cleanup in pkgs
-            nixpkgs.overlays = [ self.overlays.default ];
-            # rootless identity
-            users = {
-              groups.sonarr-cleanup = { };
-              users.sonarr-cleanup = {
-                enable = true;
-                group = "sonarr-cleanup";
-                isSystemUser = true;
-              };
-            };
-            # systemd service
-            systemd = {
-              # systemd service
-              services.sonarr-cleanup = {
-                enable = true;
-                description = "Sonarr Cleanup service";
-                restartIfChanged = true;
-                serviceConfig = {
-                  Type = "oneshot";
-                  User = "sonarr-cleanup";
-                  Group = "sonarr-cleanup";
-                  ExecStart = ''
-                    ${getExe pkgs.sonarr-cleanup} -Url ${sonclu-nixops.url} -ApiKeyPath ${sonclu-nixops.keyPath}
-                  '';
-                };
-              };
-              # timer for service triggering
-              timers.sonarr-cleanup = {
-                enable = true;
-                description = "Triggers sonarr-cleanup service";
-                wantedBy = [ "timers.target" ];
-                timerConfig.OnCalendar = sonclu-nixops.interval;
-              };
-            };
-          };
-        };
+      nixosModules.default.imports = [
+        ./src/options.nix
+        ./src/config.nix
+        { nixpkgs.overlays = [ self.overlays.default ]; }
+      ];
       #
       #
       #
       # TestVM
-      nixosConfigurations =
-        let
-          testConfig =
-            { ... }:
+      nixosConfigurations = {
+        test-vm = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            (import test-vm.baselineConfig { })
+            self.nixosModules.default
+            # test config
             {
               services.sonarr-cleanup = {
                 enable = true;
@@ -168,18 +105,10 @@
                 interval = "hourly";
                 keyPath = "/etc/sonarr-key";
               };
-            };
-        in
-        {
-          test-vm = nixpkgs.lib.nixosSystem {
-            system = "x86_64-linux";
-            modules = [
-              test-vm.baselineConfig
-              # test config
-              self.nixosModules.default
-              testConfig
-            ];
-          };
+            }
+            #
+          ];
         };
+      };
     };
 }

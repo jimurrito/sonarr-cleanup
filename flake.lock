@@ -2,11 +2,11 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1780734595,
-        "narHash": "sha256-DmTfP92QFYRLOGXlMIE54MAgxSJjDWocl3gRNOu72Os=",
+        "lastModified": 1783389287,
+        "narHash": "sha256-0xIy4dVLqq47rA+mRy0hXDfjhQd4E5PoIns/RmB7nR4=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "9b696460ac78b5ccfc17c854d8c976f20456e943",
+        "rev": "0ad6f47ea4fe188f4bc8f0380f93ae8523337c6c",
         "type": "github"
       },
       "original": {
@@ -40,17 +40,17 @@
         "test-vm": "test-vm"
       },
       "locked": {
-        "lastModified": 1780955906,
-        "narHash": "sha256-8Q/5QmQhVUO1SKcV5dTVQ+kTG2QN6vQ8u3PcDSvMKdw=",
-        "ref": "refs/heads/main",
-        "rev": "5c7600d11a24a6a1a8f30df0771ffe310075a9b5",
-        "revCount": 3,
-        "type": "git",
-        "url": "https://forgejo.immerhouse.com/jimurrito/quiet-powershell"
+        "lastModified": 1780977259,
+        "narHash": "sha256-i6iQKsb3l+cWJFmtkSF/8oTtUA1EruyUanDN1yNel0U=",
+        "owner": "jimurrito",
+        "repo": "quiet-powershell",
+        "rev": "2181eaa9cdc4f7ce11b71e1cad02d767a07633fa",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "https://forgejo.immerhouse.com/jimurrito/quiet-powershell"
+        "owner": "jimurrito",
+        "repo": "quiet-powershell",
+        "type": "github"
       }
     },
     "root": {
@@ -85,11 +85,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1780721646,
-        "narHash": "sha256-6Zb4mnaJ+i3URytB89VAozQA6kTe2mb9lVw1UHFmy/I=",
+        "lastModified": 1783544217,
+        "narHash": "sha256-W0JTMf4HpaKiWdQgVCbKGeT+CLC+BWHB+hlU9vjJDvQ=",
         "owner": "jimurrito",
         "repo": "nixos-test-vm",
-        "rev": "66ffacec9728f4043c93c5b04128b40cdb0a324d",
+        "rev": "a2e71cffdb474cc4f3942f0c365212ddd387401a",
         "type": "github"
       },
       "original": {
